@@ -1,0 +1,213 @@
+<?php
+
+//liczba wyświetlanych nodów na stronie
+define("NUM_NODES", 3);
+
+/**
+ * Implementacja hook'a hook_init().
+ */
+function kolab_news_init() {
+  
+}
+
+/**
+ * Implementacja hook'a hook_block_info().
+ */
+function kolab_news_block_info() {
+  $blocks = array();
+  $blocks['kolab_news'] = array(
+    'info' => t('News block'),
+    'cache' => DRUPAL_CACHE_PER_ROLE, // default
+    'status' => 1,
+    'region' => 'content',
+    'visibility' => BLOCK_VISIBILITY_LISTED,
+    'pages' => '<front>',
+
+  );
+  return $blocks;
+}
+
+/**
+ * Implementacja hook'a hook_block_view().
+ */
+function kolab_news_block_view($delta = '') {
+  $block = array();
+  switch ($delta) {
+    case 'kolab_news':
+      $block['subject'] = '';
+      $content = kolab_news_block_output();
+      $block['content'] = $content;
+      break;
+  }
+  return $block;
+}
+
+/**
+ * Listowanie nodów typu news 
+ * @return string
+ */
+function kolab_news_block_output(){
+  drupal_add_js(libraries_get_path('imagesloaded') . '/imagesloaded.pkgd.min.js');
+  drupal_add_js(libraries_get_path('isotope') . '/isotope.pkgd.min.js');
+  drupal_add_js(drupal_get_path('module', 'kolab_news') . '/js/kolab_news.js');
+  drupal_add_js(array('kolab_news' => array('num_nodes' => NUM_NODES)), 'setting');
+
+  $currentTime = time();
+  $output = "";
+  
+  $items = kolab_news_load("news", NUM_NODES, 0, $currentTime);
+  $nodes = kolab_news_render($items);
+
+  $data_left = kolab_news_load("news", NUM_NODES, NUM_NODES, $currentTime, true);
+
+  $output .= theme('kolab_filter', array('date'=>$currentTime));
+  $output .= theme('kolab_news', array('nodes'=>$nodes, 'data_left' => $data_left));
+  
+  return $output;
+}
+
+/**
+ * Implementacja hook'a hook_menu().
+ */
+function kolab_news_menu()
+{
+    $items['news/load-more'] = array(
+      'title' => t('News'),
+      'page callback' => 'kolab_news_more',
+      'access callback' => true,
+      'type' => MENU_CALLBACK,
+    );
+    $items['news/filter-date'] = array(
+      'title' => t('News'),
+      'page callback' => 'kolab_news_filter',
+      'access callback' => true,
+      'type' => MENU_CALLBACK,
+    );
+    return $items;
+}
+
+/**
+* Implementacja hook'a theme hook_theme().
+*/
+function kolab_news_theme()
+{
+  return array(
+    'kolab_news' => array(
+      'variables' => array('nodes' => false, 'num_nodes' => NUM_NODES),
+      'template' => 'kolab-news'
+    ),
+    'kolab_filter' => array(
+      'variables' => array('date' => false),
+      'template' => 'kolab-filter'
+    ),
+  );
+}
+
+/**
+ * Pobieranie nodów z bazy
+ * @param string $content_type nazwa rodzaju zawartości
+ * @param int $range ilość pobieranych elementów
+ * @param int $range_start od którego elementu zacząc pobieranie
+ * @param date $date data aktualnego miesiąca
+ * @param bool $count policz pobrane nody
+ * @return object
+ */
+function kolab_news_load($content_type = "news", $range = NUM_NODES, $range_start = 0, $date = false, $count = false) {
+    $query = new EntityFieldQuery;
+    $query->entityCondition('entity_type', 'node')
+          ->entityCondition('bundle', $content_type)
+          ->propertyOrderBy('created', "DESC")
+          ->propertyCondition('status', 1)
+          ->range($range_start, $range);
+    if($date) {
+      $query->propertyCondition('created', strtotime('last day of this month 23:59:59', $date), '<=');
+      $query->propertyCondition('created', strtotime('first day of this month 00:00:00', $date), '>=');
+    }
+
+    if($count) $query->count();
+    $result = $query->execute();
+
+    if(isset($result['node']) && !empty($result['node'])) {
+      return $result['node'];
+    } elseif($count) {
+      return $result;
+    } else {
+      return kolab_news_no_results();
+    }
+}
+
+/**
+ * Wyświetlanie nodów 
+ * @param array $nodes_items tablia pobranych nodów z bazy
+ * @return string
+ */
+function kolab_news_render($nodes_items) {
+  if(is_array($nodes_items)) {
+    $nids = array_keys($nodes_items);
+    $nodes = node_load_multiple($nids);
+    $nodes = node_view_multiple($nodes, "teaser");
+    return render($nodes);
+  }
+  return $nodes_items;
+}
+
+/**
+ * Funkcja dla ajax'a która pobiera pozostałe nodów
+ * @return json
+ */
+function kolab_news_more(){
+
+  $currentTime = isset($_POST['date']) ? $_POST['date'] : time();
+  $paginaion = isset($_POST['pagination']) ? $_POST['pagination'] : 0;
+
+  $items_range = NUM_NODES;
+  $json_data = array();
+
+  $range_start = ($paginaion / $items_range) * $items_range;
+
+  $items = kolab_news_load("news", $paginaion, NUM_NODES, $currentTime);
+  $nodes = kolab_news_render($items);
+
+  $data_left = kolab_news_load("news", $items_range, $range_start + $items_range, $currentTime, true);
+
+  $json_data['data_output'] = $nodes;
+  $json_data['data_left'] = $data_left;
+  $json_data['date_timestamp'] = $currentTime;
+  echo json_encode($json_data);
+  exit;
+}
+
+/**
+ * Funkcja dla ajax'a która filtruje nody według miesiąca
+ * @return json
+ */
+function kolab_news_filter() {
+  $output = '';
+  $json_data = array();
+  
+  $shift = isset($_POST["shift"]) ? $_POST["shift"] : false;
+  $ajaxDate = isset($_POST["date"]) ? $_POST["date"] : false;
+  $stringDate = ($shift == "next") ? "next month" : "previous month";
+  $date = ($shift && $ajaxDate) ? strtotime($stringDate, $ajaxDate) : time();
+
+  $items = kolab_news_load("news", NUM_NODES, 0, $date);
+  $nodes = kolab_news_render($items);
+
+  $data_left = kolab_news_load("news", NUM_NODES, NUM_NODES, $date, true);
+  
+  $json_data['data_output'] = $nodes;
+  $json_data['date_timestamp'] = $date;
+  $json_data['data_left'] = $data_left;
+  $json_data['date'] = format_date($date, 'custom', t('M Y', array(), array('context' => 'php date format')));
+  echo json_encode($json_data);
+  exit;
+}
+
+
+/**
+ * Wyświetlanie tekstu w razie braku nodów.
+ * @return string
+ */
+function kolab_news_no_results() {
+  return '<article class="no-results">' . t("Nie ma żadnych newsów"). '</article>';
+}
