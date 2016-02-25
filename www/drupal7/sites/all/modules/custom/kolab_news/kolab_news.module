@@ -1,7 +1,9 @@
 <?php
-
 //liczba wyświetlanych nodów na stronie
-define("NUM_NODES", 3);
+define("KOLAB_NUM_NODES", 3);
+
+//rodzaj zawartości
+define("KOLAB_CONTENT_TYPE", "news");
 
 /**
  * Implementacja hook'a hook_init().
@@ -50,15 +52,15 @@ function kolab_news_block_output(){
   drupal_add_js(libraries_get_path('imagesloaded') . '/imagesloaded.pkgd.min.js');
   drupal_add_js(libraries_get_path('isotope') . '/isotope.pkgd.min.js');
   drupal_add_js(drupal_get_path('module', 'kolab_news') . '/js/kolab_news.js');
-  drupal_add_js(array('kolab_news' => array('num_nodes' => NUM_NODES)), 'setting');
+  drupal_add_js(array('kolab_news' => array('kolab_num_nodes' => KOLAB_NUM_NODES)), 'setting');
 
   $currentTime = time();
   $output = "";
   
-  $items = kolab_news_load("news", NUM_NODES, 0, $currentTime);
+  $items = kolab_news_load(KOLAB_CONTENT_TYPE, KOLAB_NUM_NODES, 0, $currentTime);
   $nodes = kolab_news_render($items);
 
-  $data_left = kolab_news_load("news", NUM_NODES, NUM_NODES, $currentTime, true);
+  $data_left = kolab_news_load(KOLAB_CONTENT_TYPE, KOLAB_NUM_NODES, KOLAB_NUM_NODES, $currentTime, true);
 
   $output .= theme('kolab_filter', array('date'=>$currentTime));
   $output .= theme('kolab_news', array('nodes'=>$nodes, 'data_left' => $data_left));
@@ -93,7 +95,7 @@ function kolab_news_theme()
 {
   return array(
     'kolab_news' => array(
-      'variables' => array('nodes' => false, 'num_nodes' => NUM_NODES),
+      'variables' => array('nodes' => false, 'kolab_num_nodes' => KOLAB_NUM_NODES),
       'template' => 'kolab-news'
     ),
     'kolab_filter' => array(
@@ -112,12 +114,13 @@ function kolab_news_theme()
  * @param bool $count policz pobrane nody
  * @return object
  */
-function kolab_news_load($content_type = "news", $range = NUM_NODES, $range_start = 0, $date = false, $count = false) {
+function kolab_news_load($content_type = KOLAB_CONTENT_TYPE, $range = KOLAB_NUM_NODES, $range_start = 0, $date = false, $count = false) {
     $query = new EntityFieldQuery;
     $query->entityCondition('entity_type', 'node')
           ->entityCondition('bundle', $content_type)
           ->propertyOrderBy('created', "DESC")
           ->propertyCondition('status', 1)
+          //->fieldCondition('field_kategoria', 'tid', 1, '=')
           ->range($range_start, $range);
     if($date) {
       $query->propertyCondition('created', strtotime('last day of this month 23:59:59', $date), '<=');
@@ -152,7 +155,7 @@ function kolab_news_render($nodes_items) {
 }
 
 /**
- * Funkcja dla ajax'a która pobiera pozostałe nodów
+ * Funkcja dla ajax'a która pobiera nody według podanej daty i przesunięcia
  * @return json
  */
 function kolab_news_more(){
@@ -160,15 +163,12 @@ function kolab_news_more(){
   $currentTime = isset($_POST['date']) ? $_POST['date'] : time();
   $paginaion = isset($_POST['pagination']) ? $_POST['pagination'] : 0;
 
-  $items_range = NUM_NODES;
   $json_data = array();
 
-  $range_start = ($paginaion / $items_range) * $items_range;
-
-  $items = kolab_news_load("news", $paginaion, NUM_NODES, $currentTime);
+  $items = kolab_news_load(KOLAB_CONTENT_TYPE, $paginaion, KOLAB_NUM_NODES, $currentTime);
   $nodes = kolab_news_render($items);
 
-  $data_left = kolab_news_load("news", $items_range, $range_start + $items_range, $currentTime, true);
+  $data_left = kolab_news_load(KOLAB_CONTENT_TYPE, KOLAB_NUM_NODES, $paginaion + KOLAB_NUM_NODES, $currentTime, true);
 
   $json_data['data_output'] = $nodes;
   $json_data['data_left'] = $data_left;
@@ -178,7 +178,7 @@ function kolab_news_more(){
 }
 
 /**
- * Funkcja dla ajax'a która filtruje nody według miesiąca
+ * Funkcja dla ajax'a która pobiera nody według miesiąca
  * @return json
  */
 function kolab_news_filter() {
@@ -190,10 +190,10 @@ function kolab_news_filter() {
   $stringDate = ($shift == "next") ? "next month" : "previous month";
   $date = ($shift && $ajaxDate) ? strtotime($stringDate, $ajaxDate) : time();
 
-  $items = kolab_news_load("news", NUM_NODES, 0, $date);
+  $items = kolab_news_load(KOLAB_CONTENT_TYPE, KOLAB_NUM_NODES, 0, $date);
   $nodes = kolab_news_render($items);
 
-  $data_left = kolab_news_load("news", NUM_NODES, NUM_NODES, $date, true);
+  $data_left = kolab_news_load(KOLAB_CONTENT_TYPE, KOLAB_NUM_NODES, KOLAB_NUM_NODES, $date, true);
   
   $json_data['data_output'] = $nodes;
   $json_data['date_timestamp'] = $date;

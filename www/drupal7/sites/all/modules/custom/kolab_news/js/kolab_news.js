@@ -2,10 +2,9 @@
   Drupal.behaviors.kolab_news= {
     attach: function (context, settings) {
       var newsList = $('#news-list-main');
-      var number_pagination = settings.kolab_news.num_nodes;
+      var number_pagination = settings.kolab_news.kolab_num_nodes;
       
       if(newsList.length > 0) {
-        if(newsList.find(".no-results").length) button.fadeOut();
         newsList.imagesLoaded( function() {
           // init Masonry
           newsList.isotope({
@@ -23,7 +22,9 @@
       var loadNews = function(date) {
         var button = $('#load-more');
         var pagination = button.attr("data-pagination");
+
         $('body').append('<div class="news-loader"><span></span></div>');
+
         $.ajax({
           url: '/news/load-more',
           data: { pagination: pagination, date: date},
@@ -31,9 +32,9 @@
           dataType: 'json',
         })
         .done(function(data) {
-          $('body>.news-loader').remove();
+          
           var $newItems = $(data.data_output);
-            newsList.append($newItems).isotope('appended', $newItems).isotope('layout').isotope('layout');
+            newsList.append($newItems).isotope('appended', $newItems).isotope('layout');
             if(data.data_left == "0"){
               button.fadeOut();
             } else {
@@ -41,6 +42,7 @@
             }
             pagination = parseInt(pagination) + number_pagination;
             button.attr("data-pagination", pagination);
+            $('body>.news-loader').remove();
         })
         .fail(function() {
           $('body>.news-loader').remove();
@@ -66,12 +68,12 @@
           dataType: 'json',
         })
         .done(function(data) {
-          $('body>.news-loader').remove();
           var $newItems = $(data.data_output);
+
           $("#month-filter .main-date").attr("data-date", data.date_timestamp).html(data.date);
 
           if($newItems.length) {
-            newsList.prepend($newItems).isotope('prepended', $newItems).isotope('layout').isotope('layout');
+            newsList.prepend($newItems).isotope('prepended', $newItems).isotope('layout');
           }
 
           if(data.data_left == "0"){
@@ -81,6 +83,8 @@
           }
 
           button.attr("data-pagination", number_pagination);
+
+          $('body>.news-loader').remove();
         })
         .fail(function() {
           $('body>.news-loader').remove();
