@@ -9,6 +9,8 @@ https://docs.docker.com/engine/installation/mac/
 #### Other systems
 https://docs.docker.com/compose/install/
 
+## After docker is installed make sure you open Docker Quickstart Terminal and run all commands from there
+
 ## How to run this demo
 ```bash
 $ git clone https://github.com/kolabdigital/workshop-27.02.2016.git
